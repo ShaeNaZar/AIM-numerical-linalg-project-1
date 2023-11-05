@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def two_block_solution(A):
     b = -A[0, 0] - A[1, 1]
     c = - A[0, 1] * A[1, 0] + A[0, 0] * A[1, 1]
@@ -19,15 +20,24 @@ def householder(v):
 
     sgn = -1 if v[0] > 0 else 1
     beta = sgn * np.linalg.norm(v)
-
-    mu = 1 / np.sqrt(2 * beta**2 - 2 * v[0] * beta)
-
     w = v.copy()
     w[0] = w[0] - beta
+    w = w / (np.linalg.norm(w)  + 1e-20)
 
-    res = np.identity(len(w)) - 2 *(mu**2) *np.outer(w, w) 
+    return np.identity(len(w)) - 2 *np.outer(w, w) 
 
-    return res
+
+def sim_qr(T, n):
+    G = givenc(T[0: 2, 0]) 
+    for i in range(n - 1):   
+        m = min(i + 3, n)
+        k = max(0, i - 1)
+        T[i: i+2, k: m] = G @ T[i: i+2, k: m]    
+        if i < n-2:
+            future_G = givenc(T[i + 1: i + 3, i + 1]) 
+        
+        T[k:m, i: i + 2] = T[k:m, i: i + 2] @ G.T
+        G = future_G
 
 
 def hessenberg(A):
@@ -46,39 +56,34 @@ def hessenberg(A):
 
 
 def givenc(x):
-    r = np.sqrt(x[0]**2 + x[1]**2)
+    r = np.sqrt(x[0]**2 + x[1]**2 + 1e-20)
     cos = x[0] / r
     sin = x[1] / r
 
     return np.array([[cos, sin], [-sin, cos]])
 
 
-def top_qr(A):
-    n = len(A)
-
-    Q = np.identity(n)
-    R = A.copy()
-
+def top_qr(R, n):
+    G = givenc(R[:2, 0])
     for i in range(n - 1):
-        if R[i + 1, i] == 0:
-            continue
-
-        G = givenc(R[i:i+2, i])
         
-        R[i:i+2, :] = G @ R[i:i+2, :]
-        Q[i:i+2, :] = G @ Q[i:i+2, :]
+        R[i:i+2, :n] = G @ R[i:i+2, :n]
+        if i < n - 2:
+            future_G = givenc(R[i + 1: i+3, i + 1])
+        R[:n, i: i+ 2] = R[:n, i: i+ 2] @ G.T
 
-    return Q.T, R
+        G = future_G
 
 
-def eigenvalues(A, eps=1e-12, method="naive"):
+def eigenvalues(A, eps=1e-12, method="simple", simmetric=False, info_mode=True):
+
     H = hessenberg(A)
     n = len(A)
     counter = 0
     eigenvalues = []
+    sigma = 0
 
     while n > 0:
-
         if n == 1:
             eigenvalues.append(H[0, 0])
             n -= 1
@@ -93,17 +98,22 @@ def eigenvalues(A, eps=1e-12, method="naive"):
             
             while abs(H[n - 1, n - 2]) >= eps and abs(H[n - 2, n - 3]) >= eps:
                 if method == "simple":
-                    if eigenvalues:
-                        sigma = abs(eigenvalues[-1])
-                        sigma = abs((abs(H[n - 1, n - 1]) - abs(sigma))) * np.sign(H[n - 1, n - 1])
-                        H[np.diag_indices_from(H[:n, :n])] -= sigma
+                    sigma = H[n - 1, n - 1]
+                if method == "wilkinson":
+                    A = H[n - 2:n, n - 2:n]
+                    d = (A[0, 0] - A[1, 1]) / 2
+                    c = (A[1, 0] + A[0, 1]) / 2
+                    sigma = A[1, 1] + d - np.sign(d) * np.sqrt(d**2 + c**2)
 
-                
-                q, R = top_qr(H[:n, :n])
-                H[:n, :n] = R @ q
+                if sigma != 0:
+                    H[np.diag_indices_from(H[:n, :n])] -= sigma
 
-                if method == "simple":
-                    if eigenvalues:
+                if simmetric:
+                    sim_qr(H, n)
+                else:
+                    top_qr(H, n)
+
+                if sigma != 0:
                         H[np.diag_indices_from(H[:n, :n])] += sigma
 
                 counter += 1
@@ -120,8 +130,11 @@ def eigenvalues(A, eps=1e-12, method="naive"):
 
                 n -= 2
 
-    print(f"num iterations: {counter}")
+    if info_mode:
+        return np.array(eigenvalues[::-1]), counter
+    
     return np.array(eigenvalues[::-1])
+
 
 def naive_shur(A, iters=10):
     H = hessenberg(A)
