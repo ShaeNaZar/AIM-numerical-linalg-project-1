@@ -70,7 +70,7 @@ def do_rotation_cycle(A: np.ndarray, old_J: np.ndarray, eps: float, eigvals: boo
 
     return A, new_J
 
-def Jacobi_algorithm(A: np.ndarray, J: np.ndarray=None, eps: float=1e-15, max_cylces: int=10, eigvals: bool=True):
+def jacob(A: np.ndarray, J: np.ndarray=None, eps: float=1e-15, max_cylces: int=10, eigvals: bool=True):
     '''
     Implement Jacobi eigenvalue algorithm
     '''
@@ -106,15 +106,8 @@ def Jacobi_algorithm(A: np.ndarray, J: np.ndarray=None, eps: float=1e-15, max_cy
     return A, J, norm_off, cycle
 
 
-if __name__ == '__main__':
-    A = np.random.randn(4, 4)
-    A = A.T + A
-    res = Jacobi_algorithm(A)
+def eigenvalues(A):
+    A, _, _, _ = jacob(A)
 
-    print('было:\n', A)
-    print()
-    print('стало:\n', res[0])
-    print()
-    print('с.в.:\n', res[1])
-    print()
-    print('off=', res[2])
+    return np.diag(A)
+
